@@ -4,10 +4,10 @@ dependencies:
   - pip
   - pip:
       - streamlit==1.32.2
-      - opencv-python-headless==4.9.0.80
+      - streamlit-webrtc
       - mediapipe==0.10.11
+      - opencv-python-headless==4.9.0.80
       - numpy
       - Pillow
-
-
+      - av
 
