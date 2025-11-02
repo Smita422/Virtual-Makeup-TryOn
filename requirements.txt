@@ -1,6 +1,6 @@
 streamlit
 opencv-python-headless
-mediapipe
 numpy
+face-recognition
+dlib
 streamlit-webrtc
-Pillow
