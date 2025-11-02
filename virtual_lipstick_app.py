@@ -1,8 +1,9 @@
 import streamlit as st
-import cv2 
+import cv2
 import mediapipe as mp
 import numpy as np
-
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
+import av
 
 st.set_page_config(page_title="💄 Virtual Lipstick Try-On", layout="centered")
 
@@ -14,15 +15,16 @@ mode = st.radio("Choose Mode:", ["📷 Camera Mode", "🖼️ Upload Image Mode"
 
 # Initialize MediaPipe Face Mesh
 mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(
-    static_image_mode=False,
-    max_num_faces=1,
-    refine_landmarks=True,
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5
-)
 
-# Dark lipstick colors + natural option
+# Lip landmarks
+outer_lips = [61, 185, 40, 39, 37, 0, 267, 269, 270,
+              409, 291, 375, 321, 405, 314, 17, 84,
+              181, 91, 146]
+inner_lips = [78, 95, 88, 178, 87, 14, 317, 402,
+              318, 324, 308, 415, 310, 311, 312,
+              13, 82, 81, 80, 191]
+
+# Lipstick shades
 color_option = st.selectbox(
     "Select Lipstick Shade 💄",
     [
@@ -51,17 +53,19 @@ color_map = {
     "Chocolate Brown": (30, 30, 100)
 }
 
-# Lip landmarks
-outer_lips = [61, 185, 40, 39, 37, 0, 267, 269, 270,
-              409, 291, 375, 321, 405, 314, 17, 84,
-              181, 91, 146]
-inner_lips = [78, 95, 88, 178, 87, 14, 317, 402,
-              318, 324, 308, 415, 310, 311, 312,
-              13, 82, 81, 80, 191]
-
+# Function to apply lipstick
 def apply_lipstick(image, color, apply=True):
+    face_mesh = mp_face_mesh.FaceMesh(
+        static_image_mode=False,
+        max_num_faces=1,
+        refine_landmarks=True,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5
+    )
     rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     results = face_mesh.process(rgb)
+    face_mesh.close()
+
     if not results.multi_face_landmarks or not apply:
         return image
 
@@ -77,7 +81,7 @@ def apply_lipstick(image, color, apply=True):
 
     return cv2.addWeighted(image, 1, mask, 0.45, 0)
 
-# Upload Image Mode
+# ---------------- Upload Image Mode ----------------
 if mode == "🖼️ Upload Image Mode":
     uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
     if uploaded_file is not None:
@@ -92,26 +96,31 @@ if mode == "🖼️ Upload Image Mode":
 
         st.image(cv2.cvtColor(output, cv2.COLOR_BGR2RGB), caption="Result", use_container_width=True)
 
-# Camera Mode
+# ---------------- Real-Time Camera Mode (WebRTC) ----------------
 elif mode == "📷 Camera Mode":
-    run = st.checkbox("Start Camera")
-    FRAME_WINDOW = st.image([])
+    st.info("Allow camera access when asked. Works on Streamlit Cloud & mobile browsers 📱")
 
-    camera = cv2.VideoCapture(0)
+    RTC_CONFIGURATION = RTCConfiguration({
+        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+    })
 
-    while run:
-        ret, frame = camera.read()
-        if not ret:
-            st.write("Failed to access camera 😢")
-            break
-        frame = cv2.flip(frame, 1)
+    class LipstickProcessor(VideoProcessorBase):
+        def __init__(self):
+            self.color = color_map.get(color_option, (0, 0, 0))
+            self.apply = color_option != "None (Natural Lips)"
 
-        if color_option == "None (Natural Lips)":
-            output = frame
-        else:
-            color = color_map[color_option]
-            output = apply_lipstick(frame, color)
+        def recv(self, frame):
+            img = frame.to_ndarray(format="bgr24")
+            img = cv2.flip(img, 1)
 
-        FRAME_WINDOW.image(cv2.cvtColor(output, cv2.COLOR_BGR2RGB))
+            if self.apply:
+                img = apply_lipstick(img, self.color)
+            return av.VideoFrame.from_ndarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB), format="rgb24")
 
-    camera.release()
+    webrtc_streamer(
+        key="lipstick",
+        video_processor_factory=LipstickProcessor,
+        rtc_configuration=RTC_CONFIGURATION,
+        media_stream_constraints={"video": True, "audio": False},
+        async_processing=True,
+    )
