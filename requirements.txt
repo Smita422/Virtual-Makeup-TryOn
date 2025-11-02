@@ -1,4 +1,6 @@
-streamlit
-opencv-python-headless
-mediapipe==0.10.11
+streamlit==1.51.0
+opencv-python-headless==4.9.0.80
+mediapipe==0.10.14
 numpy
+pandas
+Pillow
