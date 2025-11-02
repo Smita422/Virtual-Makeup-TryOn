@@ -45,3 +45,4 @@ webrtc_streamer(
     video_processor_factory=LipstickProcessor,
     media_stream_constraints={"video": True, "audio": False},
 )
+
